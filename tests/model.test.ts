@@ -72,3 +72,12 @@ test("service permission-check text is not interpreted as an audit event", () =>
     "CreateAgent",
   );
 });
+
+import { isServiceEvidence } from "../infra/lambda/api/evidence";
+test("health recognizes projected service logs without a logType field", () => {
+  assert.equal(
+    isServiceEvidence('{"user_arn":"arn:user","event_timestamp":123}'),
+    true,
+  );
+  assert.equal(isServiceEvidence("Permission check completed."), false);
+});

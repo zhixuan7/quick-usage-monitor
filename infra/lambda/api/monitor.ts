@@ -13,7 +13,7 @@ import {
   DescribeLogStreamsCommand,
   GetLogEventsCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
-import { parseEvidence } from "./evidence";
+import { parseEvidence, isServiceEvidence } from "./evidence";
 import { runQuery } from "./insights";
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TableName = process.env.INVENTORY_TABLE!;
@@ -150,29 +150,30 @@ export async function monitor(path: string, start: number, end: number) {
                 logGroupName: `/aws/vendedlogs/quick-monitor/${key}`,
                 orderBy: "LastEventTime",
                 descending: true,
-                limit: 1,
+                limit: 5,
               }),
             );
-            const stream = r.logStreams?.[0];
-            const latest = stream
-              ? await cw.send(
+            const samples = await Promise.all(
+              (r.logStreams ?? []).map((stream: any) =>
+                cw.send(
                   new GetLogEventsCommand({
                     logGroupName: `/aws/vendedlogs/quick-monitor/${key}`,
                     logStreamName: stream.logStreamName,
                     limit: 5,
                     startFromHead: false,
                   }),
-                )
-              : { events: [] };
-            const evidence = (latest.events ?? []).filter((e) => {
-              const m = parseEvidence(e.message);
-              return m && (m.log_type || m.logType);
-            });
+                ),
+              ),
+            );
+            const evidence = samples
+              .flatMap((sample) => sample.events ?? [])
+              .filter((e) => isServiceEvidence(e.message))
+              .sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
             results.push({
               region,
               source: key,
               lastEventAt: evidence.at(-1)?.timestamp,
-              status: evidence.length ? "receiving" : "awaiting-activity",
+              status: evidence.length ? "receiving" : "no-recent-sample",
             });
           } catch (e) {
             results.push({

@@ -11,3 +11,15 @@ export function parseEvidence(
     return null;
   }
 }
+
+export function isServiceEvidence(message: string | undefined): boolean {
+  const value = parseEvidence(message);
+  return Boolean(
+    value &&
+    (value.log_type ||
+      value.logType ||
+      value.user_arn ||
+      value.event_name ||
+      value.event_timestamp),
+  );
+}
