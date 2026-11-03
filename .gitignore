@@ -8,3 +8,5 @@ node_modules/
 config/*.local.json
 cdk-outputs*.json
 .DS_Store
+
+.qa-output/

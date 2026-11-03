@@ -1,7 +1,74 @@
-import {test} from 'node:test';
-import assert from 'node:assert/strict';
-import {fingerprint,changedFields,matchIdentity,safeConnector} from '../infra/lambda/collector/model';
-test('snapshot fingerprints ignore key order but detect permission changes',()=>{assert.equal(fingerprint({a:1,b:2}),fingerprint({b:2,a:1}));assert.deepEqual(changedFields({permissions:['viewer'],name:'a'},{permissions:['owner'],name:'a'}),['permissions']);});
-test('identity join refuses ambiguous emails and prefers stable IDs',()=>{const users=[{id:'1',email:'a@example.com'},{id:'2',email:'a@example.com'}];assert.equal(matchIdentity({Email:'a@example.com'},users).matchMethod,'unresolved');assert.equal(matchIdentity({ExternalLoginId:'2',Email:'a@example.com'},users).identityId,'2');assert.equal(matchIdentity({Email:'A@example.com'},users.slice(0,1)).identityId,'1');});
-test('connector projection never includes authentication secrets',()=>{const row=safeConnector({ActionConnectorId:'c',AuthenticationConfig:{AuthenticationType:'OAUTH',AuthenticationMetadata:{ClientSecret:'secret',Token:'token'}},EnabledActions:['Read']},'ap-southeast-2');assert.equal(row.authenticationType,'OAUTH');assert.ok(!JSON.stringify(row).includes('secret'));assert.deepEqual(row.enabledActions,['Read']);});
-test('API rejects non-federated callers without querying AWS',async()=>{const {handler}=await import('../infra/lambda/api/index');const res:any=await handler({rawPath:'/api/monitor/directory',requestContext:{http:{method:'GET'},authorizer:{jwt:{claims:{'cognito:username':'local-user'}}}}} as any);assert.equal(res.statusCode,403);});
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  fingerprint,
+  changedFields,
+  matchIdentity,
+  safeConnector,
+} from "../infra/lambda/collector/model";
+test("snapshot fingerprints ignore key order but detect permission changes", () => {
+  assert.equal(fingerprint({ a: 1, b: 2 }), fingerprint({ b: 2, a: 1 }));
+  assert.deepEqual(
+    changedFields(
+      { permissions: ["viewer"], name: "a" },
+      { permissions: ["owner"], name: "a" },
+    ),
+    ["permissions"],
+  );
+});
+test("identity join refuses ambiguous emails and prefers stable IDs", () => {
+  const users = [
+    { id: "1", email: "a@example.com" },
+    { id: "2", email: "a@example.com" },
+  ];
+  assert.equal(
+    matchIdentity({ Email: "a@example.com" }, users).matchMethod,
+    "unresolved",
+  );
+  assert.equal(
+    matchIdentity({ ExternalLoginId: "2", Email: "a@example.com" }, users)
+      .identityId,
+    "2",
+  );
+  assert.equal(
+    matchIdentity({ Email: "A@example.com" }, users.slice(0, 1)).identityId,
+    "1",
+  );
+});
+test("connector projection never includes authentication secrets", () => {
+  const row = safeConnector(
+    {
+      ActionConnectorId: "c",
+      AuthenticationConfig: {
+        AuthenticationType: "OAUTH",
+        AuthenticationMetadata: { ClientSecret: "secret", Token: "token" },
+      },
+      EnabledActions: ["Read"],
+    },
+    "ap-southeast-2",
+  );
+  assert.equal(row.authenticationType, "OAUTH");
+  assert.ok(!JSON.stringify(row).includes("secret"));
+  assert.deepEqual(row.enabledActions, ["Read"]);
+});
+test("API rejects non-federated callers without querying AWS", async () => {
+  const { handler } = await import("../infra/lambda/api/index");
+  const res: any = await handler({
+    rawPath: "/api/monitor/directory",
+    requestContext: {
+      http: { method: "GET" },
+      authorizer: { jwt: { claims: { "cognito:username": "local-user" } } },
+    },
+  } as any);
+  assert.equal(res.statusCode, 403);
+});
+
+import { parseEvidence } from "../infra/lambda/api/evidence";
+test("service permission-check text is not interpreted as an audit event", () => {
+  assert.equal(parseEvidence("Permission check completed."), null);
+  assert.equal(parseEvidence("[]"), null);
+  assert.equal(
+    parseEvidence('{"event_name":"CreateAgent"}')?.event_name,
+    "CreateAgent",
+  );
+});

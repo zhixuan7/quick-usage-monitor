@@ -18,6 +18,8 @@
     "typecheck": "npm run typecheck --workspace infra && npm run typecheck --workspace frontend"
   },
   "devDependencies": {
+    "playwright-core": "^1.64.1",
+    "prettier": "^3.9.10",
     "tsx": "^4.23.15"
   }
 }

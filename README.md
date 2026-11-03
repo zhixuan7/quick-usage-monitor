@@ -22,7 +22,7 @@ cd ..
 npm run deploy -- config/account.local.json
 ```
 
-Configuration files ending in `.local.json`, deployment outputs, credentials, node_modules and build artifacts are ignored by Git. There are no account-specific secrets in the source. One monitor stack per account/region is supported; logs and SSM paths use fixed monitor names.
+Configuration files ending in `.local.json`, deployment outputs, credentials, node_modules and build artifacts are ignored by Git. There are no account-specific secrets in the source. An optional `existingUserPoolId` can reuse an existing retained monitor pool during recovery. One monitor stack per account/region is supported; logs and SSM paths use fixed monitor names.
 
 The first deployment creates the dashboard and data collection with SSO **pending**. It has no local-password sign-in and no publicly accessible data API. Finish federation as below, then redeploy the same stack.
 
@@ -65,6 +65,8 @@ npx cdk diff --context config=/ABSOLUTE/PATH/config/account.local.json
 ```
 
 `Collection health` reports each source error and overdue inventory. CloudWatch includes Lambda error alarms and a custom collector-error metric; alarm notification subscriptions and AWS Budgets recipients are account-specific and should be configured by the account owner. This deployment does not create email/SMS subscriptions.
+
+Browser checks use synthetic fixtures and do not bypass deployed authentication. To run them, serve `frontend/out` on 127.0.0.1:4317 and run `node scripts/browser-qa.mjs`. It uses installed Google Chrome on macOS; set CHROME_PATH on other platforms. Test screenshots go to ignored `.qa-output/`.
 
 Repeat `npm run deploy -- config/account.local.json` for updates. For another account, copy the example configuration, supply its directory/group IDs, switch AWS_PROFILE, bootstrap that account/region, and deploy. Do not reuse this account's Cognito pool or SAML application in another account.
 
