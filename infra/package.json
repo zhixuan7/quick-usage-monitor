@@ -1,0 +1,31 @@
+{
+  "name": "infra",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy --require-approval never",
+    "destroy": "cdk destroy"
+  },
+  "dependencies": {
+    "@aws-sdk/client-identitystore": "^3.1161.0",
+    "@aws-sdk/client-quicksight": "^3.1161.0",
+    "@aws-sdk/client-sts": "^3.1161.0",
+    "aws-cdk-lib": "^2.275.0",
+    "constructs": "^10.8.1"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.1161.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.1161.0",
+    "@aws-sdk/client-dynamodb": "^3.1161.0",
+    "@aws-sdk/client-ssm": "^3.1161.0",
+    "@aws-sdk/lib-dynamodb": "^3.1161.0",
+    "@types/aws-lambda": "8.10.145",
+    "@types/node": "20.16.11",
+    "aws-cdk": "^2.1147.0",
+    "esbuild": "^0.28.2",
+    "ts-node": "10.9.2",
+    "typescript": "5.6.3"
+  }
+}

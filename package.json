@@ -1,0 +1,23 @@
+{
+  "name": "quick-usage-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Serverless multi-region usage monitoring platform for Amazon Quick",
+  "workspaces": [
+    "infra",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm run dev:mock --workspace frontend",
+    "dev:live": "npm run dev --workspace frontend",
+    "build:frontend": "npm run build --workspace frontend",
+    "synth": "npm run synth --workspace infra",
+    "deploy": "node scripts/deploy.mjs",
+    "destroy": "npm run destroy --workspace infra",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "typecheck": "npm run typecheck --workspace infra && npm run typecheck --workspace frontend"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
+  }
+}

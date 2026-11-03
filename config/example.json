@@ -1,0 +1,13 @@
+{
+  "account": "123456789012",
+  "region": "ap-southeast-2",
+  "stackName": "QuickUsageMonitor",
+  "quickRegions": ["ap-southeast-2"],
+  "identityCenterRegion": "ap-southeast-2",
+  "identityStoreId": "d-xxxxxxxxxx",
+  "allowedGroupIds": ["REPLACE_WITH_MONITORING_ADMIN_GROUP_ID"],
+  "logRetentionDays": 90,
+  "archiveRetentionDays": 365,
+  "syncMinutes": 15,
+  "samlMetadataUrl": ""
+}
