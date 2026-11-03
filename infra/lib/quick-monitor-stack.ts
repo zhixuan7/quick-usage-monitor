@@ -18,6 +18,7 @@ import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as cr from "aws-cdk-lib/custom-resources";
 import * as path from "path";
+import * as fs from "fs";
 
 const STATUS_PARAM = "/quick-usage-monitor/region-status";
 
@@ -35,6 +36,18 @@ export class QuickMonitorStack extends cdk.Stack {
       this.node.tryGetContext("identityCenterRegion") ?? this.region;
     const metadataUrl: string =
       this.node.tryGetContext("samlMetadataUrl") ?? "";
+    const metadataFile: string =
+      this.node.tryGetContext("samlMetadataFile") ?? "";
+    if (metadataUrl && metadataFile)
+      throw new Error("Set only one of samlMetadataUrl or samlMetadataFile");
+    const metadata = metadataFile
+      ? cognito.UserPoolIdentityProviderSamlMetadata.file(
+          fs.readFileSync(metadataFile, "utf8"),
+        )
+      : metadataUrl
+        ? cognito.UserPoolIdentityProviderSamlMetadata.url(metadataUrl)
+        : undefined;
+    const ssoConfigured = Boolean(metadata);
     const syncMinutes: number = this.node.tryGetContext("syncMinutes") ?? 15;
     const allowedGroupIds: string[] =
       this.node.tryGetContext("allowedGroupIds");
@@ -180,12 +193,11 @@ function handler(event) {
         domainPrefix: `quick-monitor-${this.account}-${this.region}`,
       },
     });
-    const samlProvider = metadataUrl
+    const samlProvider = metadata
       ? new cognito.UserPoolIdentityProviderSaml(this, "IdentityCenter", {
           userPool,
           name: "IdentityCenter",
-          metadata:
-            cognito.UserPoolIdentityProviderSamlMetadata.url(metadataUrl),
+          metadata: metadata!,
           attributeMapping: { email: cognito.ProviderAttribute.other("email") },
         })
       : undefined;
@@ -351,7 +363,7 @@ function handler(event) {
       value: `https://${domain.domainName}.auth.${this.region}.amazoncognito.com/saml2/idpresponse`,
     });
     new cdk.CfnOutput(this, "SsoConfigured", {
-      value: String(Boolean(metadataUrl)),
+      value: String(ssoConfigured),
     });
     new cdk.CfnOutput(this, "AuditLogGroup", { value: auditLogs.logGroupName });
 
@@ -482,7 +494,7 @@ function handler(event) {
           userPoolId: userPool.userPoolId,
           userPoolClientId: userPoolClient.userPoolClientId,
           authDomain: `https://${domain.domainName}.auth.${this.region}.amazoncognito.com`,
-          ssoConfigured: Boolean(metadataUrl),
+          ssoConfigured,
           accountId: this.account,
         }),
       ],

@@ -19,6 +19,12 @@ if (
   process.env.CDK_DEFAULT_ACCOUNT !== cfg.account
 )
   throw new Error("AWS credentials do not match the configured target account");
+if (cfg.samlMetadataFile) {
+  cfg.samlMetadataFile = path.resolve(
+    path.dirname(path.resolve(file)),
+    cfg.samlMetadataFile,
+  );
+}
 Object.entries(cfg).forEach(([key, value]) => app.node.setContext(key, value));
 cdk.Tags.of(app).add("project", "quick-usage-monitor");
 new QuickMonitorStack(app, cfg.stackName ?? "QuickUsageMonitor", {

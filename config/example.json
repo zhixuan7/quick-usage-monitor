@@ -9,5 +9,6 @@
   "logRetentionDays": 90,
   "archiveRetentionDays": 365,
   "syncMinutes": 15,
-  "samlMetadataUrl": ""
+  "samlMetadataUrl": "",
+  "samlMetadataFile": ""
 }

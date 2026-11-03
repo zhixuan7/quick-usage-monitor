@@ -57,3 +57,33 @@ test("stack uses federation, private origin, protected GET API and connector dat
   assert.ok(policies.includes("lambda:InvokeFunction"));
   assert.ok(!policies.includes('\"lambda:Invoke\"'));
 });
+
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+test("downloaded SAML metadata activates federation without publishing a URL", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "quick-monitor-saml-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const metadata =
+    '<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol" /></EntityDescriptor>';
+  const file = join(dir, "metadata.xml");
+  writeFileSync(file, metadata);
+  const app = new cdk.App({
+    context: {
+      quickRegions: ["ap-southeast-2"],
+      identityStoreId: "d-1234567890",
+      allowedGroupIds: ["admin-group"],
+      samlMetadataFile: file,
+    },
+  });
+  const stack = new QuickMonitorStack(app, "FileMetadataMonitor", {
+    env: { account: "123456789012", region: "ap-southeast-2" },
+  });
+  const template = Template.fromStack(stack);
+  template.hasResourceProperties("AWS::Cognito::UserPoolIdentityProvider", {
+    ProviderName: "IdentityCenter",
+    ProviderDetails: { MetadataFile: metadata },
+  });
+  template.hasOutput("SsoConfigured", { Value: "true" });
+});

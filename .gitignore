@@ -10,3 +10,5 @@ cdk-outputs*.json
 .DS_Store
 
 .qa-output/
+
+config/*.local.xml
