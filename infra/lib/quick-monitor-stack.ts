@@ -216,7 +216,11 @@ function handler(event) {
         : [],
       oAuth: {
         flows: { authorizationCodeGrant: true },
-        scopes: [cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL],
+        scopes: [
+          cognito.OAuthScope.OPENID,
+          cognito.OAuthScope.EMAIL,
+          cognito.OAuthScope.PROFILE,
+        ],
         callbackUrls: [`${dashboardUrl()}/auth/callback/`],
         logoutUrls: [`${dashboardUrl()}/login/`],
       },

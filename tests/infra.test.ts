@@ -25,6 +25,7 @@ test("stack uses federation, private origin, protected GET API and connector dat
   t.hasResourceProperties("AWS::Cognito::UserPoolClient", {
     GenerateSecret: false,
     AllowedOAuthFlows: ["code"],
+    AllowedOAuthScopes: ["openid", "email", "profile"],
     SupportedIdentityProviders: ["IdentityCenter"],
   });
   t.hasResourceProperties("AWS::ApiGatewayV2::Route", {

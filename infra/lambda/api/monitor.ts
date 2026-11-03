@@ -1,3 +1,5 @@
+import type { APIGatewayProxyEventV2WithJWTAuthorizer } from "aws-lambda";
+import { federatedClaims } from "./federation";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
@@ -39,27 +41,28 @@ export async function inventory(pk: string) {
   } while (ExclusiveStartKey);
   return rows;
 }
-export async function authorize(claims: Record<string, any>) {
-  let ids;
-  try {
-    ids =
-      typeof claims.identities === "string"
-        ? JSON.parse(claims.identities)
-        : claims.identities;
-  } catch {
+export async function authorize(
+  event: APIGatewayProxyEventV2WithJWTAuthorizer,
+) {
+  const claims = federatedClaims(event);
+  if (!claims) {
+    console.warn("MonitorAuthorizationDenied", {
+      reason: "federation-claims-unavailable",
+    });
     return false;
   }
-  if (
-    !Array.isArray(ids) ||
-    !ids.some((i) => i.providerName === "IdentityCenter")
-  )
-    return false;
   const users = (await inventory("user")).filter(
     (u) =>
       !u.deletedAt &&
       u.email?.toLowerCase() === String(claims.email ?? "").toLowerCase(),
   );
-  if (users.length !== 1) return false;
+  if (users.length !== 1) {
+    console.warn("MonitorAuthorizationDenied", {
+      reason: "directory-match-not-unique",
+      matchCount: users.length,
+    });
+    return false;
+  }
   const store = new IdentitystoreClient({
     region: process.env.IDENTITY_REGION,
   });
@@ -80,6 +83,9 @@ export async function authorize(claims: Record<string, any>) {
       return true;
     NextToken = r.NextToken;
   } while (NextToken);
+  console.warn("MonitorAuthorizationDenied", {
+    reason: "monitoring-group-not-assigned",
+  });
   return false;
 }
 export async function monitor(path: string, start: number, end: number) {

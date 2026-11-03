@@ -2,7 +2,7 @@
 
 A reusable AWS CDK deployment for a Next.js dashboard: Quick usage, IAM Identity Center users grouped by membership, agents, permissions, connectors, actual invocations, configured relationships, audit timeline and collection health.
 
-Frontend: private S3 origin + CloudFront. API: HTTP API + Lambda, with Cognito JWT validation and a live Identity Center group membership check on every request. Inventory: scheduled Lambda + DynamoDB snapshots. Evidence: regional Quick vended logs and a dedicated multi-region CloudTrail trail delivering to CloudWatch and S3. Source systems are read-only to the collectors.
+Frontend: private S3 origin + CloudFront. API: HTTP API + Lambda, with Cognito JWT validation and a live Identity Center group membership check on every request. Federation claims are read from the original bearer token and bound to the verified gateway subject/issuer/audience, avoiding nested-claim serialization differences. Inventory: scheduled Lambda + DynamoDB snapshots. Evidence: regional Quick vended logs and a dedicated multi-region CloudTrail trail delivering to CloudWatch and S3. Source systems are read-only to the collectors.
 
 ## Deploy to an AWS account
 
@@ -35,7 +35,7 @@ AWS requires creation of a customer-managed SAML application in the Identity Cen
 3. Map `Subject` to `${user:subject}` with persistent format, and `email` to `${user:email}` with unspecified format. The application relies on an authoritative email assertion; the backend requires exactly one matching Identity Store user and verifies live group membership. Ambiguous or absent identities are denied.
 4. Assign only the intended monitoring administrators group. Assignment alone is insufficient: its group ID must also be present in `allowedGroupIds`.
 5. Copy the **IAM Identity Center SAML metadata URL** into `samlMetadataUrl` in your local account configuration. Alternatively, download the application metadata XML to an ignored `config/*.local.xml` file and set `samlMetadataFile` to its path relative to your account configuration file. Set only one of the two fields. With a downloaded file, replace it and redeploy when Identity Center rotates its signing certificate. Do not use Entra's metadata directly: Identity Center is the application's federation endpoint.
-6. Redeploy with the same command. The login button then redirects through Identity Center and Entra ID. OAuth authorization-code flow uses PKCE and state validation.
+6. Redeploy with the same command. The login button then redirects through Identity Center and Entra ID. OAuth authorization-code flow uses PKCE and state validation and requests `openid email profile`; profile claims are required for the federation check. After a scope change, sign out and sign in again to replace older tokens.
 7. Validate an authorized user can read data and a user outside the configured monitoring group receives 403. Removing a group membership is enforced on the next API request.
 
 All authorized monitoring group members can view the same account-wide evidence. Group filters are analytical filters, not tenant-isolation boundaries. Directory access requires `identitystore:ListUsers`, `ListGroups`, and `ListGroupMemberships`; API authorization also requires `ListGroupMembershipsForMember`. Cross-account Identity Center deployments need an explicitly configured role/trust policy; this version assumes the directory is readable by the deployment account's Lambda roles.

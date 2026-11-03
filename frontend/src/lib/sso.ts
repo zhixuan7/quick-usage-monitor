@@ -20,7 +20,7 @@ export async function startSso() {
   const q = new URLSearchParams({
     client_id: cfg.userPoolClientId,
     response_type: "code",
-    scope: "openid email",
+    scope: "openid email profile",
     redirect_uri: `${location.origin}/auth/callback/`,
     identity_provider: "IdentityCenter",
     state,

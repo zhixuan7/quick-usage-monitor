@@ -739,7 +739,7 @@ export async function handler(event: APIGatewayProxyEventV2WithJWTAuthorizer): P
   const caller = getCaller(event);
 
   try {
-    if (!await authorize(event.requestContext.authorizer?.jwt?.claims ?? {})) return json(403, { error: 'Membership of an authorized Identity Center monitoring group is required' });
+    if (!await authorize(event)) return json(403, { error: 'Membership of an authorized Identity Center monitoring group is required' });
     if (method !== 'GET') return json(405, { error: 'This monitoring dashboard is read-only' });
     if (path.startsWith('/api/monitor/')) {
       const result = await monitor(path, range.start, range.end);
