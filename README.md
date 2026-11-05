@@ -1,6 +1,6 @@
 # Amazon Quick Usage & Audit Monitor
 
-A reusable AWS CDK deployment for a Next.js dashboard: Quick usage, IAM Identity Center users grouped by membership, agents, permissions, connectors, actual invocations, configured relationships, audit timeline and collection health.
+A reusable AWS CDK deployment for a Next.js dashboard: Quick usage, IAM Identity Center users grouped by membership, agents with a Permissions view, connectors, actual invocations, configured relationships and an audit timeline. Connector invocations display inventory names, and agent creators display their directory name/email when resolvable. Original IDs remain in record details.
 
 Frontend: private S3 origin + CloudFront. API: HTTP API + Lambda, with Cognito JWT validation and a live Identity Center group membership check on every request. Federation claims are read from the original bearer token and bound to the verified gateway subject/issuer/audience, avoiding nested-claim serialization differences. Inventory: scheduled Lambda + DynamoDB snapshots. Evidence: regional Quick vended logs and a dedicated multi-region CloudTrail trail delivering to CloudWatch and S3. Source systems are read-only to the collectors.
 
@@ -43,14 +43,14 @@ All authorized monitoring group members can view the same account-wide evidence.
 ## Coverage and semantics
 
 - The scheduled inventory runs every 15 minutes by default and immediately after first deployment. Public Quick APIs capture baseline agents, permissions, connectors and explicit attachments.
-- Six vended log types: CHAT_LOGS, FEEDBACK_LOGS, AGENT_HOURS_LOGS, INDEX_USAGE_LOGS, KB_FILE_SYNC_LOGS, AGENT_METADATA_LOGS. Existing delivery sources are reused without altering their field selection; destinations are separate. Unsupported sources are visible in collection health.
+- Six vended log types: CHAT_LOGS, FEEDBACK_LOGS, AGENT_HOURS_LOGS, INDEX_USAGE_LOGS, KB_FILE_SYNC_LOGS, AGENT_METADATA_LOGS. Existing delivery sources are reused without altering their field selection; destinations are separate. Unsupported sources are visible on the Regions page and in CloudWatch collector logs.
 - Lifecycle and permission events come from AGENT_METADATA_LOGS; connector management and actual InvokeAction activity come from CloudTrail. Connector availability in chat logs is labelled separately from calls.
 - The dedicated trail preserves all existing trails and selectors. It captures management events (an additional billable copy when another trail already captures them) plus ActionConnector data events (also billable). Scope/cost should be reviewed when expanding regions or event volumes.
 - Snapshot observations are not exact audit timestamps. Missing resources are marked only after a complete successful source enumeration. Failed enumerations preserve last-known data and report an error.
 - Quick users are joined to directory identities by stable ID where available, otherwise unique exact email. Ambiguous matches are unresolved. Group reporting is labelled as current membership; snapshots support observed history but cannot reconstruct uncaptured earlier changes.
 - Explicit agent attachments are not effective permissions and do not prove invocation. Agents without attachments can still have access to dynamically available connectors. Invocation records without an agent ID remain unattributed.
 - Audit pages show at most the latest 1,000 matching records in the selected period. Narrow the time window for busy accounts. S3 holds full captured CloudTrail history; no claim of complete historical search through the UI.
-- Collection starts when enabled; no automatic historical backfill from existing trails. Quick usage delivery may be delayed. Last observed log activity and inventory sync health are displayed separately.
+- Collection starts when enabled; no automatic historical backfill from existing trails. Quick usage delivery may be delayed. Inventory synchronization and pipeline diagnostics remain available through the protected monitoring API and CloudWatch logs.
 - Sensitive connector authentication metadata is never stored in inventory. Agent prompt bodies are excluded from inventory/API projections. Usage chat logs may contain customer content; authorize dashboard users accordingly.
 - Defaults: 90-day CloudWatch retention, 365-day audit archive, 365-day snapshot TTL. Inventory, user pool and audit data are retained on stack removal. Delete retained resources separately only when intentional.
 
@@ -64,11 +64,15 @@ cd infra
 npx cdk diff --context config=/ABSOLUTE/PATH/config/account.local.json
 ```
 
-`Collection health` reports each source error and overdue inventory. CloudWatch includes Lambda error alarms and a custom collector-error metric; alarm notification subscriptions and AWS Budgets recipients are account-specific and should be configured by the account owner. This deployment does not create email/SMS subscriptions.
+The internal `/api/monitor/health` endpoint reports each source error and overdue inventory. The Collection health and Knowledge sync pages have been removed from the dashboard. CloudWatch includes Lambda error alarms and a custom collector-error metric; alarm notification subscriptions and AWS Budgets recipients are account-specific and should be configured by the account owner. This deployment does not create email/SMS subscriptions.
 
 Browser checks use synthetic fixtures and do not bypass deployed authentication. To run them, serve `frontend/out` on 127.0.0.1:4317 and run `node scripts/browser-qa.mjs`. It uses installed Google Chrome on macOS; set CHROME_PATH on other platforms. Test screenshots go to ignored `.qa-output/`.
 
 Repeat `npm run deploy -- config/account.local.json` for updates. For another account, copy the example configuration, supply its directory/group IDs, switch AWS_PROFILE, bootstrap that account/region, and deploy. Do not reuse this account's Cognito pool or SAML application in another account.
+
+## Configuration history
+
+Configuration history is a set of observations from periodic inventory checks (15 minutes by default). Initial configuration means the first saved snapshot; Configuration changed means a later check detected differences. Observed timestamps are not exact edit times, and changes between checks can be missed. Use agent audit events or the audit timeline to identify recorded actions and actors. Agent inventory and Permissions share the Agents page; old `/permissions/` bookmarks redirect to its Permissions view.
 
 ## Source provenance
 

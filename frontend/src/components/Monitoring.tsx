@@ -8,7 +8,6 @@ import {
   EmptyState,
   Pager,
   usePager,
-  StatusBadge,
 } from "./shared";
 import { request } from "@/lib/api";
 import { Button } from "./ui/button";
@@ -83,7 +82,7 @@ function Grid({ items, columns }: { items: Row[]; columns: Column[] }) {
           <Pager {...pager} onChange={pager.setPage} />
         </>
       ) : (
-        <EmptyState message="No records for the selected filters. Check collection health if activity was expected." />
+        <EmptyState message="No records for the selected filters." />
       )}
       {selected && (
         <section className="mt-4 border-t pt-4">
@@ -120,27 +119,15 @@ const settings: Record<
     ],
   },
   agents: {
-    title: "Agents",
+    title: "Agents & permissions",
     description:
-      "Current inventory and lifecycle events. Deleted and missing resources retain their observed history.",
+      "Agent inventory, creator details, permissions and lifecycle history in one place.",
     endpoint: "agents",
     columns: [
       ["name", "Agent"],
       ["status", "Status"],
-      ["creator", "Creator"],
+      ["creatorDisplay", "Creator"],
       ["updatedAt", "Last service update"],
-      ["region", "Region"],
-    ],
-  },
-  permissions: {
-    title: "Agent permissions",
-    description:
-      "Resource permission statements and exact grant/revoke events where supplied by Quick.",
-    endpoint: "agents",
-    columns: [
-      ["agentName", "Agent"],
-      ["principal", "Principal"],
-      ["actions", "Allowed actions"],
       ["region", "Region"],
     ],
   },
@@ -165,7 +152,7 @@ const settings: Record<
     columns: [
       ["timestamp", "Time"],
       ["actor", "Actor"],
-      ["connectorId", "Connector"],
+      ["connectorName", "Connector"],
       ["action", "Action"],
       ["status", "Outcome"],
       ["httpStatus", "HTTP status"],
@@ -196,24 +183,13 @@ const settings: Record<
       ["status", "Outcome"],
     ],
   },
-  health: {
-    title: "Collection health",
-    description:
-      "Inventory synchronization and latest observed log activity. No events yet does not by itself prove a delivery failure.",
-    endpoint: "health",
-    columns: [
-      ["region", "Region"],
-      ["source", "Source"],
-      ["status", "Status"],
-      ["lastEvent", "Last observed event"],
-    ],
-  },
 };
 export default function Monitoring({ category }: { category: string }) {
   const cfg = settings[category];
   const [data, setData] = useState<Row | null>(null);
   const [events, setEvents] = useState<Row[]>([]);
   const [history, setHistory] = useState<Row[]>([]);
+  const [historyInterval, setHistoryInterval] = useState(15);
   const [connectors, setConnectors] = useState<Row[]>([]);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -221,6 +197,24 @@ export default function Monitoring({ category }: { category: string }) {
   const [hours, setHours] = useState("168");
   const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [agentTab, setAgentTab] = useState<"inventory" | "permissions">(
+    "inventory",
+  );
+  const permissionsTab = category === "agents" && agentTab === "permissions";
+  useEffect(() => {
+    if (
+      category === "agents" &&
+      new URLSearchParams(window.location.search).get("tab") === "permissions"
+    )
+      setAgentTab("permissions");
+  }, [category]);
+  function selectAgentTab(tab: "inventory" | "permissions") {
+    setAgentTab(tab);
+    const url = new URL(window.location.href);
+    if (tab === "permissions") url.searchParams.set("tab", tab);
+    else url.searchParams.delete("tab");
+    window.history.replaceState(null, "", url);
+  }
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -251,34 +245,26 @@ export default function Monitoring({ category }: { category: string }) {
         });
       }
       if (active) setData(value);
-      if (["agents", "permissions"].includes(category)) {
+      if (category === "agents") {
         const e = await request<Row>(
           "GET",
           `/api/monitor/agent-events?hours=${hours}`,
         );
         if (active) {
-          setEvents(
-            (e.items ?? []).filter(
-              (x: Row) =>
-                category !== "permissions" || /Permission/.test(x.event),
-            ),
-          );
+          setEvents(e.items ?? []);
           if (e.errors?.length)
             setError(
               `Some agent event sources are unavailable: ${e.errors.map((x: Row) => x.region + ": " + x.error).join("; ")}`,
             );
         }
       }
-      if (
-        ["agents", "permissions", "connectors", "relationships"].includes(
-          category,
-        )
-      ) {
+      if (["agents", "connectors", "relationships"].includes(category)) {
         const h = await request<Row>(
           "GET",
           `/api/monitor/history?hours=${hours}`,
         );
-        if (active)
+        if (active) {
+          setHistoryInterval(h.intervalMinutes ?? 15);
           setHistory(
             h.items.filter((x: Row) =>
               category === "connectors"
@@ -286,6 +272,7 @@ export default function Monitoring({ category }: { category: string }) {
                 : x.resourceType.startsWith("agent:"),
             ),
           );
+        }
       }
       if (category === "relationships") {
         const c = await request<Row>("GET", "/api/monitor/connectors");
@@ -305,20 +292,14 @@ export default function Monitoring({ category }: { category: string }) {
       return (data.users ?? []).filter(
         (u: Row) => !group || u.groups.some((g: Row) => g.id === group),
       );
-    if (category === "health")
-      return (data.streams ?? []).map((r: Row) => ({
-        ...r,
-        lastEvent: r.lastEventAt
-          ? new Date(r.lastEventAt).toLocaleString()
-          : "No events yet",
-      }));
-    if (category === "permissions")
+    if (permissionsTab)
       return (data.items ?? [])
         .filter((a: Row) => !a.deletedAt)
         .flatMap((a: Row) =>
           a.permissions.map((p: Row) => ({
             agentName: a.name,
-            principal: p.Principal,
+            principal: p.PrincipalDisplay ?? p.Principal,
+            principalId: p.Principal,
             actions: p.Actions,
             region: a.region,
             observedAt: a.observedAt,
@@ -339,7 +320,7 @@ export default function Monitoring({ category }: { category: string }) {
           })),
         );
     return data.items ?? [];
-  }, [data, category, group, connectors]);
+  }, [data, category, group, connectors, permissionsTab]);
   const filtered = allRows.filter((r) =>
     JSON.stringify(r).toLowerCase().includes(query.toLowerCase()),
   );
@@ -358,6 +339,24 @@ export default function Monitoring({ category }: { category: string }) {
           </Button>
         }
       />
+      {category === "agents" && (
+        <div className="mb-5 flex gap-2" role="group" aria-label="Agent views">
+          <Button
+            variant={agentTab === "inventory" ? "default" : "outline"}
+            aria-pressed={agentTab === "inventory"}
+            onClick={() => selectAgentTab("inventory")}
+          >
+            Agent inventory
+          </Button>
+          <Button
+            variant={permissionsTab ? "default" : "outline"}
+            aria-pressed={permissionsTab}
+            onClick={() => selectAgentTab("permissions")}
+          >
+            Permissions
+          </Button>
+        </div>
+      )}
       <div className="mb-5 flex flex-wrap gap-3">
         <Input
           aria-label="Search records"
@@ -405,23 +404,6 @@ export default function Monitoring({ category }: { category: string }) {
       )}
       {data && (
         <>
-          {category === "health" && (
-            <Panel title="Inventory synchronization">
-              <StatusBadge status={data.sync?.status ?? "not-run"} />
-              <p className="my-2 text-sm">
-                Last sync: {data.sync?.updatedAt ?? "Not yet run"}{" "}
-                {data.stale ? "— overdue" : ""}
-              </p>
-              <Grid
-                items={data.sync?.sources ?? []}
-                columns={[
-                  ["name", "Source"],
-                  ["status", "Status"],
-                  ["error", "Detail"],
-                ]}
-              />
-            </Panel>
-          )}
           {category === "relationships" && (
             <p className="mb-4 text-sm text-muted-foreground">
               Agents without explicit connector attachments are not shown here.
@@ -431,17 +413,36 @@ export default function Monitoring({ category }: { category: string }) {
           )}
           <div className="mt-4">
             <Panel title={`${filtered.length} records`}>
-              <Grid items={filtered} columns={cfg.columns} />
+              <Grid
+                key={permissionsTab ? "permissions" : "inventory"}
+                items={filtered}
+                columns={
+                  permissionsTab
+                    ? [
+                        ["agentName", "Agent"],
+                        ["principal", "User / group"],
+                        ["actions", "Allowed actions"],
+                        ["region", "Region"],
+                      ]
+                    : cfg.columns
+                }
+              />
             </Panel>
           </div>
-          {["agents", "permissions"].includes(category) && (
+          {category === "agents" && (
             <div className="mt-6">
-              <Panel title="Agent audit events">
+              <Panel
+                title={
+                  permissionsTab ? "Permission changes" : "Agent audit events"
+                }
+              >
                 <Grid
-                  items={events.filter((r) =>
-                    JSON.stringify(r)
-                      .toLowerCase()
-                      .includes(query.toLowerCase()),
+                  items={events.filter(
+                    (r) =>
+                      (!permissionsTab || /Permission/.test(r.event)) &&
+                      JSON.stringify(r)
+                        .toLowerCase()
+                        .includes(query.toLowerCase()),
                   )}
                   columns={[
                     ["timestamp", "Time"],
@@ -455,24 +456,38 @@ export default function Monitoring({ category }: { category: string }) {
               </Panel>
             </div>
           )}
-          {["agents", "permissions", "connectors", "relationships"].includes(
-            category,
-          ) && (
+          {["agents", "connectors", "relationships"].includes(category) && (
             <div className="mt-6">
-              <Panel title="Configuration observations">
+              <Panel title="Configuration history">
                 <p className="mb-3 text-sm text-muted-foreground">
-                  Baseline and periodic snapshots, not exact audit timestamps.
-                  Changes between scans may not be captured.
+                  Saved configuration checks run every {historyInterval}{" "}
+                  minutes. The initial record is the starting configuration;
+                  later records show differences found by a check. These times
+                  show when a change was noticed. Use audit events for recorded
+                  action times and actors.
                 </p>
                 <Grid
-                  items={history.filter((r) =>
-                    JSON.stringify(r)
-                      .toLowerCase()
-                      .includes(query.toLowerCase()),
-                  )}
+                  items={history
+                    .filter((r) =>
+                      JSON.stringify(r)
+                        .toLowerCase()
+                        .includes(query.toLowerCase()),
+                    )
+                    .map((r) => ({
+                      ...r,
+                      changeType:
+                        (
+                          {
+                            BaselineObserved: "Initial configuration",
+                            SnapshotChanged: "Configuration changed",
+                            MissingFromSuccessfulInventory:
+                              "Missing from inventory",
+                          } as Record<string, string>
+                        )[r.event] ?? r.event,
+                    }))}
                   columns={[
                     ["observedAt", "Observed at"],
-                    ["event", "Observation"],
+                    ["changeType", "Change"],
                     ["resourceName", "Resource"],
                     ["changedFields", "Changed fields"],
                   ]}

@@ -17,6 +17,7 @@ import {
 } from "@aws-sdk/client-cloudwatch-logs";
 import { parseEvidence, isServiceEvidence } from "./evidence";
 import { runQuery } from "./insights";
+import { nameLookup } from "./names";
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TableName = process.env.INVENTORY_TABLE!;
 export async function inventory(pk: string) {
@@ -124,16 +125,41 @@ export async function monitor(path: string, start: number, end: number) {
         )
         .sort((a, b) => b.observedAt.localeCompare(a.observedAt)),
       kind: "inventory-observations",
+      intervalMinutes: Number(process.env.SYNC_MINUTES ?? 15),
     };
   }
   if (path === "/api/monitor/agents" || path === "/api/monitor/connectors") {
     const type = path.endsWith("agents") ? "agent" : "connector";
+    const items = (
+      await Promise.all(regions.map((r) => inventory(`${type}:${r}`)))
+    ).flat();
+    if (type === "connector") return { items };
+    const [users, quickUsers] = await Promise.all([
+      inventory("user"),
+      Promise.all(regions.map((r) => inventory(`quick-user:${r}`))).then(
+        (rows) => rows.flat(),
+      ),
+    ]);
+    const names = nameLookup(users, quickUsers, []);
     return {
-      items: (
-        await Promise.all(regions.map((r) => inventory(`${type}:${r}`)))
-      ).flat(),
+      items: items.map((agent) => {
+        const creator = names.person(agent.creator);
+        return {
+          ...agent,
+          creatorName: creator?.name,
+          creatorEmail: creator?.email,
+          creatorDisplay: creator?.display || agent.creator || "System",
+          permissions: (agent.permissions ?? []).map((permission: any) => ({
+            ...permission,
+            PrincipalDisplay:
+              names.person(permission.Principal)?.display ||
+              permission.Principal,
+          })),
+        };
+      }),
     };
   }
+
   if (path === "/api/monitor/health") {
     const sync = await db.send(
       new GetCommand({ TableName, Key: { pk: "system", sk: "sync" } }),
@@ -286,8 +312,19 @@ export async function monitor(path: string, start: number, end: number) {
         },
       ];
     });
+    const connectors = (
+      await Promise.all(regions.map((r) => inventory(`connector:${r}`)))
+    ).flat();
+    const names = nameLookup([], [], connectors);
     return {
-      items: [...new Map(items.map((x) => [x.id, x])).values()],
+      items: [
+        ...new Map(
+          items.map((x) => [
+            x.id,
+            { ...x, connectorName: names.connector(x.connectorId, x.region) },
+          ]),
+        ).values(),
+      ],
       limit: 1000,
     };
   }

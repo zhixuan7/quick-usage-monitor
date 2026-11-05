@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     template: '%s · Quick Usage Monitor',
   },
   description:
-    'Multi-region usage monitoring for Amazon Quick: chat activity, agent hours, storage, knowledge sync health, and per-user analytics in one dashboard.',
+    'Multi-region usage monitoring for Amazon Quick: users and groups, agents and permissions, connector activity, and audit history in one dashboard.',
   applicationName: 'Quick Usage Monitor',
   keywords: [
     'Amazon Quick', 'usage monitoring', 'analytics dashboard', 'agent hours',
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     siteName: 'Quick Usage Monitor',
     title: 'Quick Usage Monitor',
     description:
-      'Multi-region usage monitoring for Amazon Quick: chat activity, agent hours, storage, knowledge sync health, and per-user analytics.',
+      'Multi-region usage monitoring for Amazon Quick: users and groups, agents and permissions, connector activity, and audit history.',
     url: SITE_URL,
   },
   twitter: {

@@ -1,6 +1,6 @@
 import { chromium } from "playwright-core";
 import assert from "node:assert/strict";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, existsSync } from "node:fs";
 mkdirSync(".qa-output", { recursive: true });
 const browser = await chromium.launch({
   executablePath:
@@ -16,10 +16,15 @@ const agent = {
   name: "Test agent",
   status: "ACTIVE",
   creator: "test-user",
+  creatorDisplay: "Test Creator (creator@example.com)",
   region: "ap-southeast-2",
   connectors: ["c"],
   permissions: [
-    { Principal: "test-user", Actions: ["quicksight:DescribeAgent"] },
+    {
+      Principal: "test-user",
+      PrincipalDisplay: "Test User (test@example.com)",
+      Actions: ["quicksight:DescribeAgent"],
+    },
   ],
   observedAt: "2026-11-03T00:00:00Z",
 };
@@ -72,7 +77,18 @@ const routes = {
       },
     ],
   },
-  "/api/monitor/history": { items: [] },
+  "/api/monitor/history": {
+    items: [
+      {
+        event: "BaselineObserved",
+        resourceType: "agent:ap-southeast-2",
+        resourceName: "Test agent",
+        observedAt: "2026-11-03T00:00:00Z",
+        changedFields: ["name"],
+      },
+    ],
+    intervalMinutes: 15,
+  },
   "/api/monitor/invocations": {
     items: [
       {
@@ -80,6 +96,7 @@ const routes = {
         event: "InvokeAction",
         action: "Read",
         connectorId: "c",
+        connectorName: "Test connector",
         status: "SUCCESS",
       },
     ],
@@ -130,17 +147,79 @@ try {
   for (const [path, text] of [
     ["directory", "Test User"],
     ["agents", "Test agent"],
-    ["permissions", "quicksight:DescribeAgent"],
     ["connectors", "Test connector"],
-    ["invocations", "SUCCESS"],
+    ["invocations", "Test connector"],
     ["relationships", "Test connector"],
     ["audit", "CreateAgent"],
-    ["health", "identity-center"],
   ]) {
     await page.goto(`http://127.0.0.1:4317/${path}/`);
     await page.getByText(text, { exact: true }).first().waitFor();
     console.log(`PASS ${path}`);
   }
+  await page.goto("http://127.0.0.1:4317/agents/");
+  await page
+    .getByText("Test Creator (creator@example.com)", { exact: true })
+    .waitFor();
+  await page.getByText("Configuration history", { exact: true }).waitFor();
+  await page.getByText("Initial configuration", { exact: true }).waitFor();
+  for (const name of [
+    "Knowledge sync",
+    "Collection health",
+    "Agent permissions",
+    "System health",
+  ])
+    assert.equal(
+      await page.getByRole("link", { name, exact: true }).count(),
+      0,
+    );
+  await page.getByRole("button", { name: "Permissions", exact: true }).click();
+  await page.getByText("quicksight:DescribeAgent", { exact: true }).waitFor();
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Permissions", exact: true })
+      .getAttribute("aria-pressed"),
+    "true",
+  );
+  await page.screenshot({
+    path: ".qa-output/agent-permissions.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page
+    .getByRole("button", { name: "Agent inventory", exact: true })
+    .click();
+  await page
+    .getByText("Test Creator (creator@example.com)", { exact: true })
+    .waitFor();
+  await page.screenshot({
+    path: ".qa-output/agents.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  console.log(
+    "PASS merged agent views, creator display, history explanation and removed navigation",
+  );
+  await page.goto("http://127.0.0.1:4317/permissions/");
+  await page.waitForURL(
+    (u) =>
+      u.pathname === "/agents/" && u.searchParams.get("tab") === "permissions",
+  );
+  await page.getByText("quicksight:DescribeAgent", { exact: true }).waitFor();
+  console.log("PASS legacy permissions bookmark");
+  await page.goto("http://127.0.0.1:4317/invocations/");
+  await page.getByText("Test connector", { exact: true }).waitFor();
+  await page
+    .getByRole("button", { name: "Details", exact: true })
+    .first()
+    .click();
+  assert.ok(
+    (await page.locator("pre").textContent()).includes('"connectorId": "c"'),
+  );
+  assert.equal(existsSync("frontend/out/health/index.html"), false);
+  assert.equal(existsSync("frontend/out/kb-sync/index.html"), false);
+  console.log(
+    "PASS connector names preserve IDs in details and removed pages are not exported",
+  );
   await page.goto("http://127.0.0.1:4317/directory/");
   await page.getByText("Test User", { exact: true }).waitFor();
   await page
@@ -154,7 +233,11 @@ try {
     .getByLabel("Identity Center group", { exact: true })
     .selectOption("g");
   await page.getByText("Test User", { exact: true }).waitFor();
-  await page.screenshot({ path: ".qa-output/directory.png", fullPage: true });
+  await page.screenshot({
+    path: ".qa-output/directory.png",
+    fullPage: true,
+    animations: "disabled",
+  });
   await page.goto("http://127.0.0.1:4317/login/");
   await page
     .getByRole("button", { name: "Sign in with your company account" })
@@ -175,6 +258,7 @@ try {
   await page.screenshot({
     path: ".qa-output/failure.png",
     fullPage: true,
+    animations: "disabled",
   });
   throw e;
 } finally {
