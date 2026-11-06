@@ -1,6 +1,6 @@
 import { chromium } from "playwright-core";
 import assert from "node:assert/strict";
-import { mkdirSync, existsSync } from "node:fs";
+import { mkdirSync, existsSync, readFileSync } from "node:fs";
 mkdirSync(".qa-output", { recursive: true });
 const browser = await chromium.launch({
   executablePath:
@@ -46,7 +46,18 @@ const routes = {
         email: "test@example.com",
         groups: [{ id: "g", name: "Monitoring Admins" }],
         quickAccounts: [{ arn: "arn:test:user", role: "ADMIN_PRO" }],
+        username: "test-user",
+        observedAt: "2026-11-06T00:00:00Z",
       },
+      ...Array.from({ length: 12 }, (_, i) => ({
+        id: `u-${i}`,
+        name: `Directory Person ${i}`,
+        email: `person-${i}@example.com`,
+        groups: [],
+        quickAccounts: [],
+        username: `person-${i}`,
+        observedAt: "2026-11-06T00:00:00Z",
+      })),
     ],
     groups: [
       { id: "g", name: "Monitoring Admins", memberIds: ["u"] },
@@ -229,6 +240,33 @@ try {
     .getByText("No records for the selected filters.", { exact: false })
     .waitFor();
   console.log("PASS group filter");
+  await page.getByLabel("Search records", { exact: true }).fill("no-match");
+  const downloadReady = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download all users (CSV)" }).click();
+  const download = await downloadReady;
+  assert.match(
+    download.suggestedFilename(),
+    /^identity-center-users-\d{4}-\d{2}-\d{2}-168h\.csv$/,
+  );
+  const csv = readFileSync(await download.path(), "utf8");
+  const csvLines = csv.trimEnd().split("\r\n");
+  assert.equal(csvLines.length, 14);
+  assert.equal(
+    csvLines[0],
+    '\uFEFF"User","Email","Groups","Quick roles","Latest chat activity","Messages in period","User ID","Username","Group IDs","Quick accounts (JSON)","Last observed"',
+  );
+  assert.ok(
+    csv.includes(
+      '"Test User","test@example.com","Monitoring Admins","ADMIN_PRO","Active in selected period","5","u","test-user","g"',
+    ),
+  );
+  assert.ok(csv.includes('""arn"":""arn:test:user""'));
+  assert.ok(csv.includes('"2026-11-06T00:00:00Z"'));
+  assert.ok(csv.includes('"Directory Person 11","person-11@example.com"'));
+  console.log(
+    "PASS full directory CSV includes every column and users beyond pagination/search/group filters",
+  );
+  await page.getByLabel("Search records", { exact: true }).fill("");
   await page
     .getByLabel("Identity Center group", { exact: true })
     .selectOption("g");

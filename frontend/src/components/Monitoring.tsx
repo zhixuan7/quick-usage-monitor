@@ -10,6 +10,8 @@ import {
   usePager,
 } from "./shared";
 import { request } from "@/lib/api";
+import { directoryColumns, directoryCsv } from "@/lib/directory-csv";
+import { downloadFile } from "@/lib/report";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import {
@@ -109,14 +111,7 @@ const settings: Record<
     description:
       "Directory membership and matched Quick accounts. Users in multiple groups appear once in the directory total.",
     endpoint: "directory",
-    columns: [
-      ["name", "User"],
-      ["email", "Email"],
-      ["groups", "Groups"],
-      ["quickRoles", "Quick roles"],
-      ["lastActivity", "Latest chat activity"],
-      ["messages", "Messages in period"],
-    ],
+    columns: directoryColumns,
   },
   agents: {
     title: "Agents & permissions",
@@ -330,13 +325,29 @@ export default function Monitoring({ category }: { category: string }) {
         title={cfg.title}
         subtitle={cfg.description}
         right={
-          <Button
-            variant="outline"
-            onClick={() => setRefresh((n) => n + 1)}
-            disabled={loading}
-          >
-            {loading ? "Loading…" : "Refresh"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {category === "directory" && (
+              <Button
+                onClick={() =>
+                  downloadFile(
+                    `identity-center-users-${new Date().toISOString().slice(0, 10)}-${hours}h.csv`,
+                    directoryCsv(data?.users ?? []),
+                    "text/csv",
+                  )
+                }
+                disabled={loading || !!error || !data}
+              >
+                Download all users (CSV)
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => setRefresh((n) => n + 1)}
+              disabled={loading}
+            >
+              {loading ? "Loading…" : "Refresh"}
+            </Button>
+          </div>
         }
       />
       {category === "agents" && (
@@ -392,6 +403,12 @@ export default function Monitoring({ category }: { category: string }) {
           </select>
         )}
       </div>
+      {category === "directory" && (
+        <p className="mb-4 text-sm text-muted-foreground">
+          CSV downloads include all users and columns, regardless of search or
+          group filters. Usage figures follow the selected time period.
+        </p>
+      )}
       {error && (
         <div className="mb-4">
           <ErrorBox message={error} />
